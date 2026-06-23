@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   FileText,
   CreditCard,
+  Users,
   Settings,
   LogOut,
   Store,
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Stock", href: "/stock", icon: Package },
   { name: "Point de Vente", href: "/pos", icon: ShoppingCart },
+  { name: "Clients", href: "/clients", icon: Users },
   { name: "Factures", href: "/factures", icon: FileText },
   { name: "Paiements", href: "/paiements", icon: CreditCard },
 ];
