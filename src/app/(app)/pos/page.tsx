@@ -65,13 +65,42 @@ export default function POSPage() {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal;
 
-  const handlePayment = () => {
-    setShowPayment(false);
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-      setCart([]);
-    }, 2000);
+  const handlePayment = async () => {
+    const txRef = `shopcongo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    if (paymentMethod === "cash") {
+      setShowPayment(false);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setCart([]);
+      }, 2000);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: total,
+          email: "client@shopcongo.cd",
+          tx_ref: txRef,
+          payment_method: paymentMethod,
+          currency: "USD",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        alert(data.error || "Erreur de paiement");
+      }
+    } catch (error) {
+      alert("Erreur de connexion au serveur de paiement");
+    }
   };
 
   return (
