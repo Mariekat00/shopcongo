@@ -1,58 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { useAuth } from "@/hooks/useAuth";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { savePendingSale } from "@/lib/offline";
 import {
   Plus,
   Minus,
   Trash2,
   ShoppingBag,
-  CreditCard,
   Banknote,
   Smartphone,
   X,
   Check,
+  WifiOff,
 } from "lucide-react";
 
-const products = [
-  { id: 1, name: "Riz 5kg", price: 8.50, stock: 45 },
-  { id: 2, name: "Huile végétale 1L", price: 4.20, stock: 2 },
-  { id: 3, name: "Savon noir", price: 1.50, stock: 78 },
-  { id: 4, name: "Pâte dentifrice", price: 2.80, stock: 32 },
-  { id: 5, name: "Eau minérale 1.5L", price: 0.75, stock: 120 },
-  { id: 6, name: "Jus d\'orange 1L", price: 2.00, stock: 3 },
-];
-
 interface CartItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   quantity: number;
 }
 
 export default function POSPage() {
+  const { user } = useAuth();
+  const { isOnline } = useOnlineStatus();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mtn_momo" | "orange_money">("cash");
   const [showSuccess, setShowSuccess] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  const addToCart = (product: typeof products[0]) => {
-    const existing = cart.find((item) => item.id === product.id);
+  const products = useQuery(
+    api.products.list,
+    user ? { userId: user.id } : "skip"
+  );
+
+  const createSale = useMutation(api.sales.create);
+
+  const addToCart = (product: any) => {
+    if (product.stock <= 0) return;
+    const existing = cart.find((item) => item.id === product._id);
     if (existing) {
+      if (existing.quantity >= product.stock) return;
       setCart(
         cart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product._id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { id: product._id, name: product.name, price: product.price, quantity: 1 }]);
     }
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: string) => {
     setCart(cart.filter((item) => item.id !== id));
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: string, delta: number) => {
     setCart(
       cart
         .map((item) =>
@@ -67,8 +75,44 @@ export default function POSPage() {
 
   const handlePayment = async () => {
     const txRef = `shopcongo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
 
     if (paymentMethod === "cash") {
+      if (!isOnline) {
+        await savePendingSale({
+          id: txRef,
+          userId: user?.id ?? "",
+          items: cart.map((item) => ({
+            productId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            total: item.price * item.quantity,
+          })),
+          subtotal,
+          total,
+          paymentMethod: "cash",
+          invoiceNumber,
+        });
+        setPendingCount((c) => c + 1);
+      } else {
+        await createSale({
+          userId: user?.id ?? "",
+          invoiceNumber,
+          subtotal,
+          total,
+          paymentMethod: "cash",
+          paymentStatus: "paid",
+          amountPaid: total,
+          items: cart.map((item) => ({
+            productId: item.id as any,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            total: item.price * item.quantity,
+          })),
+        });
+      }
+
       setShowPayment(false);
       setShowSuccess(true);
       setTimeout(() => {
@@ -105,27 +149,46 @@ export default function POSPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-6">
+      {/* Offline banner */}
+      {!isOnline && (
+        <div className="fixed top-16 left-64 right-0 z-40 bg-amber-100 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
+          <WifiOff className="w-4 h-4 text-amber-600" />
+          <span className="text-sm text-amber-700">
+            Hors-ligne — Les ventes seront synchronisées plus tard
+            {pendingCount > 0 && ` (${pendingCount} en attente)`}
+          </span>
+        </div>
+      )}
+
       {/* Products grid */}
       <div className="flex-1 flex flex-col">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Point de Vente</h1>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 flex-1 overflow-auto">
-          {products.map((product) => (
-            <button
-              key={product.id}
-              onClick={() => addToCart(product)}
-              disabled={product.stock <= 0}
-              className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
-                <ShoppingBag className="w-6 h-6 text-blue-600" />
-              </div>
-              <p className="text-sm font-semibold text-gray-900">{product.name}</p>
-              <p className="text-lg font-bold text-blue-600 mt-1">${product.price.toFixed(2)}</p>
-              <p className={`text-xs mt-1 ${product.stock <= 5 ? "text-red-500" : "text-gray-400"}`}>
-                Stock: {product.stock}
-              </p>
-            </button>
-          ))}
+          {(!products || products.length === 0) ? (
+            <div className="col-span-full p-12 text-center">
+              <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">Aucun produit</p>
+              <p className="text-sm text-gray-400">Ajoutez des produits dans Stock d&apos;abord</p>
+            </div>
+          ) : (
+            products.map((product: any) => (
+              <button
+                key={product._id}
+                onClick={() => addToCart(product)}
+                disabled={product.stock <= 0}
+                className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
+                  <ShoppingBag className="w-6 h-6 text-blue-600" />
+                </div>
+                <p className="text-sm font-semibold text-gray-900">{product.name}</p>
+                <p className="text-lg font-bold text-blue-600 mt-1">${product.price.toFixed(2)}</p>
+                <p className={`text-xs mt-1 ${product.stock <= 5 ? "text-red-500" : "text-gray-400"}`}>
+                  Stock: {product.stock}
+                </p>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -136,20 +199,19 @@ export default function POSPage() {
           <p className="text-sm text-gray-500">{cart.length} article(s)</p>
         </div>
 
-        {/* Cart items */}
         <div className="flex-1 overflow-auto p-5 space-y-3">
           {cart.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">Panier vide</p>
-              <p className="text-sm text-gray-400">Cliquez sur un produit pour l&apos;ajouter</p>
+              <p className="text-sm text-gray-400">Cliquez sur un produit</p>
             </div>
           ) : (
             cart.map((item) => (
               <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                  <p className="text-sm text-gray-500">${item.price.toFixed(2)} unité</p>
+                  <p className="text-sm text-gray-500">${item.price.toFixed(2)} /unité</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -180,12 +242,7 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Total & Pay */}
         <div className="p-5 border-t border-gray-100 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Sous-total</span>
-            <span className="font-medium">${subtotal.toFixed(2)}</span>
-          </div>
           <div className="flex items-center justify-between text-lg">
             <span className="font-bold text-gray-900">Total</span>
             <span className="font-bold text-blue-600">${total.toFixed(2)}</span>
@@ -205,7 +262,7 @@ export default function POSPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-gray-900">Choisir le paiement</h2>
+              <h2 className="text-lg font-bold text-gray-900">Paiement</h2>
               <button onClick={() => setShowPayment(false)} className="p-1 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -215,9 +272,7 @@ export default function POSPage() {
               <button
                 onClick={() => setPaymentMethod("cash")}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors ${
-                  paymentMethod === "cash"
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
+                  paymentMethod === "cash" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -232,9 +287,7 @@ export default function POSPage() {
               <button
                 onClick={() => setPaymentMethod("mtn_momo")}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors ${
-                  paymentMethod === "mtn_momo"
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
+                  paymentMethod === "mtn_momo" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -249,9 +302,7 @@ export default function POSPage() {
               <button
                 onClick={() => setPaymentMethod("orange_money")}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors ${
-                  paymentMethod === "orange_money"
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
+                  paymentMethod === "orange_money" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -265,8 +316,8 @@ export default function POSPage() {
             </div>
 
             <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600">Total à payer</span>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Total</span>
                 <span className="text-xl font-bold text-blue-600">${total.toFixed(2)}</span>
               </div>
             </div>
@@ -289,7 +340,9 @@ export default function POSPage() {
           </div>
           <div>
             <p className="font-semibold">Vente enregistrée !</p>
-            <p className="text-sm text-green-100">Paiement reçu avec succès</p>
+            <p className="text-sm text-green-100">
+              {isOnline ? "Paiement reçu" : "Sera synchronisé plus tard"}
+            </p>
           </div>
         </div>
       )}
