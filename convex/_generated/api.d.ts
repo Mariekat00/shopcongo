@@ -8,9 +8,54 @@
  * @module
  */
 
-import type { FunctionReference, AnyFunction } from "convex/server";
+import type * as categories from "../categories.js";
+import type * as customers from "../customers.js";
+import type * as dashboard from "../dashboard.js";
+import type * as payments from "../payments.js";
+import type * as products from "../products.js";
+import type * as profiles from "../profiles.js";
+import type * as sales from "../sales.js";
 
-type ApiModule = Record<string, Record<string, FunctionReference<AnyFunction, "public">>>;
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 
-export declare const api: ApiModule;
-export declare const internal: ApiModule;
+declare const fullApi: ApiFromModules<{
+  categories: typeof categories;
+  customers: typeof customers;
+  dashboard: typeof dashboard;
+  payments: typeof payments;
+  products: typeof products;
+  profiles: typeof profiles;
+  sales: typeof sales;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};

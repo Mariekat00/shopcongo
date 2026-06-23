@@ -1,30 +1,23 @@
 /* eslint-disable */
 /**
  * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
  * To regenerate, run `npx convex dev`.
+ * @module
  */
 
-function createProxy() {
-  var noopFn = function() {};
-  
-  var handler = {
-    get: function(_target, prop) {
-      if (typeof prop === "string") {
-        return new Proxy(noopFn, {
-          apply: function() { return undefined; },
-          get: function(_fn, innerProp) {
-            if (innerProp === "toString") return function() { return "[ConvexFunction: " + prop + "]"; };
-            if (typeof innerProp === "string") return new Proxy(noopFn, handler);
-            return undefined;
-          },
-        });
-      }
-      return undefined;
-    },
-  };
+import { anyApi, componentsGeneric } from "convex/server";
 
-  return new Proxy({}, handler);
-}
-
-export var api = createProxy();
-export var internal = createProxy();
+/**
+ * A utility for referencing Convex functions in your app's API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export const api = anyApi;
+export const internal = anyApi;
+export const components = componentsGeneric();

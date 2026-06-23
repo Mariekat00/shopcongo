@@ -72,8 +72,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
   })
     .index("by_userId", ["userId"])
-    .index("by_customer", ["customerId"])
-    .index("by_date", ["userId"]),
+    .index("by_customer", ["customerId"]),
 
   saleItems: defineTable({
     saleId: v.id("sales"),

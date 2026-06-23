@@ -1,12 +1,15 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 interface User {
   id: string;
   email: string;
   name: string;
+  businessName?: string;
+  phone?: string;
+  city?: string;
 }
 
 interface AuthContextType {
@@ -17,9 +20,9 @@ interface AuthContextType {
     email: string;
     password: string;
     name: string;
-    businessName: string;
-    phone: string;
-    city: string;
+    businessName?: string;
+    phone?: string;
+    city?: string;
   }) => Promise<void>;
   logout: () => void;
 }
@@ -30,31 +33,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const stored = localStorage.getItem("shopcongo_user");
-    if (stored) {
-      setUser(JSON.parse(stored));
+    try {
+      const stored = localStorage.getItem("shopcongo_user");
+      if (stored) {
+        setUser(JSON.parse(stored));
+      }
+    } catch {
+      localStorage.removeItem("shopcongo_user");
     }
     setLoading(false);
   }, []);
 
+  const isAuthPage = pathname.startsWith("/auth");
+  const isLandingPage = pathname === "/";
+
+  useEffect(() => {
+    if (!loading && !user && !isAuthPage && !isLandingPage) {
+      router.push("/auth/login");
+    }
+  }, [user, loading, isAuthPage, isLandingPage, router]);
+
   const login = async (email: string, _password: string) => {
-    const mockUser: User = {
-      id: "user_" + Date.now(),
-      email,
-      name: email.split("@")[0],
-    };
+    const stored = localStorage.getItem("shopcongo_user");
+    let mockUser: User;
+
+    if (stored) {
+      const existing = JSON.parse(stored);
+      if (existing.email === email) {
+        mockUser = existing;
+      } else {
+        mockUser = {
+          id: "user_" + Date.now(),
+          email,
+          name: email.split("@")[0],
+        };
+      }
+    } else {
+      mockUser = {
+        id: "user_" + Date.now(),
+        email,
+        name: email.split("@")[0],
+      };
+    }
+
     localStorage.setItem("shopcongo_user", JSON.stringify(mockUser));
     setUser(mockUser);
     router.push("/dashboard");
   };
 
-  const register = async (data: { email: string; name: string }) => {
+  const register = async (data: {
+    email: string;
+    name: string;
+    businessName?: string;
+    phone?: string;
+    city?: string;
+  }) => {
     const mockUser: User = {
       id: "user_" + Date.now(),
       email: data.email,
       name: data.name,
+      businessName: data.businessName,
+      phone: data.phone,
+      city: data.city,
     };
     localStorage.setItem("shopcongo_user", JSON.stringify(mockUser));
     setUser(mockUser);
